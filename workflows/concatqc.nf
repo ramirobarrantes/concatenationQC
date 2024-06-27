@@ -6,6 +6,7 @@
 
 include { FASTQC                 } from '../modules/nf-core/fastqc/main'
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
+include { CAT_FASTQ              } from '../modules/nf-core/cat/fastq/main'                 
 include { PREPROCESS             } from '../modules/local/processes'
 include { paramsSummaryMap       } from 'plugin/nf-validation'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -29,9 +30,9 @@ workflow CONCATQC {
     ch_multiqc_files = Channel.empty()
 
     //
-    // MODULE: Run FastQC
+    // MODULE: Run concatenate
     //
-    PREPROCESS (
+    CAT_FASTQ (
         ch_samplesheet
     )
  
