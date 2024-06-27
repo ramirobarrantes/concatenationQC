@@ -4,8 +4,10 @@ options(echo=FALSE,warning=FALSE) # if you want see commands in output file
 args <- commandArgs(trailingOnly = TRUE)
 
 sampleSheet <- args[1]
-type <- args[2] # Nanopore, geomx
+type <- args[2] # Nanopore, geomx, singular
 outputFilename <- args[3]
+directories <- args[4]
+directories <- strsplit(directories,",")[[1]]
 
 suppressWarnings(library(readxl))
 library(tools)
@@ -13,7 +15,7 @@ library(ini)
 library(stringr)
 #checking files
 
-createNanoporeSamplesheets <- function(sampleSheet) {
+createNanoporeSamplesheets <- function(sampleSheet,outputFilename) {
   data <- read.table(sampleSheet,header=TRUE,sep=",")
   df <- do.call(rbind,lapply(1:96, function(n) {
     barcode <- paste0("barcode",str_pad(n, 2, pad = "0"))
@@ -29,7 +31,7 @@ createNanoporeSamplesheets <- function(sampleSheet) {
   write.table(df,file=outputFilename,row.names=FALSE,quote=FALSE,col.names=FALSE,sep=",")
 }
 
-createGeomxConcatSamplesheets <- function(sampleSheet) {
+createGeomxConcatSamplesheets <- function(sampleSheet,outputFilename) {
   data <- read.csv(sampleSheet)
   for (i in 1:nrow(data)) {
     fastqFiles <- gsub(" ","",strsplit(data[i,"FASTQ_file_location"],split=",")[[1]])
@@ -78,16 +80,43 @@ createGeomxConcatSamplesheets <- function(sampleSheet) {
   }
 }
 
+createSingularSamplesheets <- function(sampleSheet,directories,outputFilename) {
+  tmp <- read.csv(sampleSheet)
+  idx <- which(tmp[,1]=="Sample_ID")
+  data <- tmp[(idx+1):nrow(tmp),]
+  colnames(data) <- tmp[idx,]
+  sampleIds <- unique(data$Sample_ID)
+  df <- do.call(rbind,lapply(1:length(sampleIds), function(i) {
+    sampleID <- sampleIds[i]
+    R1 <- c()
+    R2 <- c()
+    for (j in 1:length(directories)) {
+      dir <- directories[j]
+      filesR1 <- list.files(path=dir,pattern=paste0(sampleID,".*_R1_.*.fastq.gz"),full.names=TRUE)
+      R1 <- c(R1,filesR1)
+      filesR2 <- list.files(path=dir,pattern=paste0(sampleID,".*_R2_.*.fastq.gz"),full.names=TRUE)
+      R2 <- c(R2,filesR2)
+    }
+    rbind(data.frame(id=paste0(sampleID,"_R1"),fastqList=paste0('"',paste(R1,collapse=","),'"')),
+          data.frame(id=paste0(sampleID,"_R2"),fastqList=paste0('"',paste(R2,collapse=","),'"')))
+  }))
+  write.table(df,file=outputFilename,row.names=FALSE,quote=FALSE,col.names=TRUE,sep=",")
+}
+
 
 type <- toupper(type)
 if (type=="GEOMX") {
-  concatenationSampleSheets <- createGeomxConcatSamplesheets(sampleSheet)
+  concatenationSampleSheets <- createGeomxConcatSamplesheets(sampleSheet,outputFilename)
   cmd <- paste0("sbatch runConcatenation.sh ",sampleSheet," ",iniOutput)
 }
 if (type=="NANOPORE") {
-  concatenationSampleSheets <- createNanoporeSamplesheets(sampleSheet)
+  concatenationSampleSheets <- createNanoporeSamplesheets(sampleSheet,outputFilename)
 #  cmd <- paste0("sbatch runConcatenation.sh ",sampleSheet," ",outputDirectory)
 }
+if (type=="SINGULAR") {
+  concatenationSampleSheets <- createSingularSamplesheets(sampleSheet,directories,outputFilename)
+}
+
 
 message("Done.")
 #system(cmd)
